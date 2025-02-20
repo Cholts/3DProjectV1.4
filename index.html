@@ -8,109 +8,45 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/vr/WebXR.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f0f0f0;
-      color: #333;
-    }
-
-    #webxr-container {
-      width: 100vw;
-      height: 100vh;
-      background: #111;
-    }
-
-    .controls-container {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 10;
-      background-color: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 15px;
-      border-radius: 10px;
-      max-width: 300px;
-      width: 100%;
-    }
-
-    .button {
-      background: #007BFF;
-      color: white;
-      padding: 10px;
-      border: none;
-      border-radius: 5px;
-      width: 100%;
-      cursor: pointer;
-      margin-top: 10px;
-      text-align: center;
-    }
-
-    .button:hover {
-      background: #0056b3;
-    }
-
-    .annotation-container {
-      margin-top: 15px;
-      background-color: rgba(255, 255, 255, 0.1);
-      padding: 10px;
-      border-radius: 5px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-
-    .annotation-item {
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      margin-bottom: 10px;
-      padding: 10px;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-    .annotation-item:hover {
-      background: rgba(255, 0, 0, 0.7);
-    }
-    
-    .annotation-input {
-      width: 100%;
-      padding: 8px;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-      margin-bottom: 10px;
-    }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f0f0f0; color: #333; }
+    #webxr-container { width: 100vw; height: 100vh; background: #111; }
+    .controls-container { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(0, 0, 0, 0.8); color: white; padding: 15px; border-radius: 10px; max-width: 300px; width: 100%; }
+    .button { background: #007BFF; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px; }
+    .button:hover { background: #0056b3; }
+    .annotation-container { margin-top: 15px; background: rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 5px; max-height: 200px; overflow-y: auto; }
+    .annotation-item { background: rgba(0, 0, 0, 0.8); color: white; margin-bottom: 10px; padding: 10px; border-radius: 5px; cursor: pointer; }
+    .annotation-item:hover { background: rgba(255, 0, 0, 0.7); }
+    .annotation-text { position: absolute; background: rgba(255,255,255,0.8); padding: 5px; border-radius: 5px; display: none; }
   </style>
 </head>
 <body>
-
   <div class="controls-container">
     <h1>3D Model Viewer</h1>
     <input type="file" id="fileInput" accept=".glb, .gltf" />
     <button class="button" onclick="enterVR()">Enter VR Mode</button>
-
     <div class="annotation-container">
       <h2>Annotations</h2>
-      <input type="text" id="annotationInput" class="annotation-input" placeholder="Enter annotation..." />
+      <input type="text" id="annotationInput" placeholder="Enter annotation..." />
       <button class="button" onclick="addAnnotation()">Add Annotation</button>
       <button class="button" onclick="deleteAnnotation()">Delete Selected</button>
       <div id="annotations"></div>
     </div>
   </div>
-
   <div id="webxr-container"></div>
-
   <script>
-    let scene, camera, renderer, modelObject = null, annotations = [];
-    let annotationsDiv = document.getElementById('annotations');
-    let selectedAnnotation = null;
-
-    if (localStorage.getItem('annotations')) {
-      annotations = JSON.parse(localStorage.getItem('annotations'));
+    let scene, camera, renderer, model, annotations = [];
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      document.getElementById('webxr-container').appendChild(renderer.domElement);
+      const light = new THREE.AmbientLight(0xffffff, 3);
+      scene.add(light);
+      camera.position.z = 3;
+      animate();
     }
-
-    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
-
     function handleFileUpload(event) {
       const file = event.target.files[0];
       if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) {
@@ -118,10 +54,9 @@
         reader.onload = function(e) {
           let loader = new THREE.GLTFLoader();
           loader.load(URL.createObjectURL(file), function(gltf) {
-            modelObject = gltf.scene;
-            scene.add(modelObject);
-            modelObject.scale.set(0.5, 0.5, 0.5);
-            loadAnnotations();
+            model = gltf.scene;
+            scene.add(model);
+            model.scale.set(0.5, 0.5, 0.5);
           });
         };
         reader.readAsArrayBuffer(file);
@@ -129,98 +64,55 @@
         alert('Please upload a valid .glb or .gltf model');
       }
     }
-
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.getElementById('webxr-container').appendChild(renderer.domElement);
-
-      const light = new THREE.AmbientLight(0xffffff, 3);
-      scene.add(light);
-      camera.position.z = 3;
-
-      animate();
-    }
-
     function addAnnotation() {
-      if (!modelObject) {
-        alert("Load a model first!");
-        return;
-      }
-
-      const annotationText = document.getElementById('annotationInput').value;
-      if (annotationText.trim() === "") return;
-
+      if (!model) return alert("Load a model first!");
+      const text = document.getElementById('annotationInput').value;
+      if (!text) return;
       const annotation = {
         id: annotations.length,
-        text: annotationText,
+        text,
         position: { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() * 2 - 1 }
       };
-
       annotations.push(annotation);
-      localStorage.setItem('annotations', JSON.stringify(annotations));
-      loadAnnotations();
+      updateAnnotations();
     }
-
-    function loadAnnotations() {
-      annotationsDiv.innerHTML = '';
+    function updateAnnotations() {
+      const container = document.getElementById('annotations');
+      container.innerHTML = '';
       annotations.forEach((annotation, index) => {
         const item = document.createElement('div');
         item.className = 'annotation-item';
         item.innerText = annotation.text;
-        item.onclick = () => selectAnnotation(index);
-        annotationsDiv.appendChild(item);
-
+        item.onclick = () => alert("Annotation: " + annotation.text);
+        container.appendChild(item);
         const sphere = new THREE.Mesh(
           new THREE.SphereGeometry(0.05),
           new THREE.MeshBasicMaterial({ color: 0xff0000 })
         );
         sphere.position.set(annotation.position.x, annotation.position.y, annotation.position.z);
-        sphere.userData.annotationIndex = index;
         scene.add(sphere);
       });
     }
-
-    function selectAnnotation(index) {
-      selectedAnnotation = index;
-      alert("Selected: " + annotations[index].text);
-    }
-
     function deleteAnnotation() {
-      if (selectedAnnotation === null) {
-        alert("Select an annotation first!");
-        return;
-      }
-      annotations.splice(selectedAnnotation, 1);
-      localStorage.setItem('annotations', JSON.stringify(annotations));
-      selectedAnnotation = null;
-      loadAnnotations();
+      annotations.pop();
+      updateAnnotations();
     }
-
     function enterVR() {
       if (navigator.xr) {
         navigator.xr.requestSession('immersive-vr').then((session) => {
-          renderer.xr.enabled = true;
           renderer.xr.setSession(session);
         });
       } else {
         alert('WebXR not supported.');
       }
     }
-
     function animate() {
       requestAnimationFrame(animate);
-      if (modelObject) {
-        modelObject.rotation.y += 0.01;
-      }
+      if (model) model.rotation.y += 0.01;
       renderer.render(scene, camera);
     }
-
+    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
     init();
-    loadAnnotations();
   </script>
-
 </body>
 </html>
