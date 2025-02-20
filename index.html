@@ -8,35 +8,101 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/vr/WebXR.js"></script>
   <style>
-    body { margin: 0; overflow: hidden; }
-    #webxr-container { width: 100vw; height: 100vh; }
-    button { position: absolute; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.5); color: white; padding: 10px; }
-    .annotation { position: absolute; background: rgba(0, 0, 0, 0.5); color: white; padding: 5px; }
-    .annotation-container { position: absolute; top: 10px; left: 10px; z-index: 10; color: white; }
-    .annotation-list { margin-top: 10px; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      background: #f0f0f0;
+    }
+    #webxr-container {
+      width: 100vw;
+      height: 100vh;
+    }
+    .upload-container {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      color: white;
+      border-radius: 5px;
+    }
+    input[type="file"] {
+      margin-bottom: 10px;
+      display: block;
+    }
+    .button {
+      background: #007BFF;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .button:hover {
+      background: #0056b3;
+    }
+    .annotation-list {
+      margin-top: 15px;
+      display: flex;
+      flex-direction: column;
+    }
+    .annotation-item {
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      margin-bottom: 5px;
+      padding: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .annotation-item:hover {
+      background: rgba(0, 0, 0, 0.9);
+    }
+    .annotation-container {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 20;
+      color: white;
+      font-size: 14px;
+    }
+    .annotation-input {
+      width: 200px;
+      padding: 5px;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
   <div id="webxr-container"></div>
-  
-  <!-- Upload and Annotation UI -->
-  <div class="annotation-container">
+  <div class="upload-container">
     <input type="file" id="fileInput" accept=".glb, .gltf" />
-    <button onclick="enterVR()">Enter VR</button>
-    <div id="annotations" class="annotation-list"></div>
+    <button class="button" onclick="enterVR()">Enter VR</button>
+    <div class="annotation-container">
+      <label>Add Annotation:</label>
+      <input type="text" id="annotationInput" class="annotation-input" placeholder="Type your annotation" />
+      <button class="button" onclick="addAnnotation()">Add Annotation</button>
+      <div id="annotations" class="annotation-list"></div>
+    </div>
   </div>
-  
-  <script>
-    // Main JavaScript Code
 
+  <script>
     let scene, camera, renderer;
-    let modelUrl = null;  // Store the model URL from file input
+    let modelUrl = null;
     let modelObject = null;
-    let annotations = [];  // Array to store annotations
+    let annotations = [];  // Store annotation data
     let annotationsDiv = document.getElementById('annotations');
     let uploadedModel = false;
 
-    // Handle the file upload
+    // Load annotations from local storage if any
+    if (localStorage.getItem('annotations')) {
+      annotations = JSON.parse(localStorage.getItem('annotations'));
+      loadAnnotations();
+    }
+
+    // Handle file upload
     document.getElementById('fileInput').addEventListener('change', handleFileUpload);
 
     function handleFileUpload(event) {
@@ -53,7 +119,6 @@
       }
     }
 
-    // Initialize the 3D scene
     function init() {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -65,10 +130,11 @@
       const light = new THREE.AmbientLight(0x404040, 5);
       scene.add(light);
 
-      // WebXR session setup
+      // Setup WebXR session for VR support
       if (navigator.xr) {
         const xrButton = document.createElement('button');
         xrButton.innerHTML = "Enter VR";
+        xrButton.className = "button";
         document.body.appendChild(xrButton);
         xrButton.onclick = () => {
           navigator.xr.requestSession('immersive-vr').then(onSessionStarted);
@@ -78,68 +144,74 @@
       animate();
     }
 
-    // Load the 3D model dynamically based on the uploaded file
+    // Load 3D model
     function loadModel() {
       if (modelUrl && !uploadedModel) {
         const loader = new THREE.GLTFLoader();
         loader.load(modelUrl, function(gltf) {
           modelObject = gltf.scene;
           scene.add(modelObject);
-          modelObject.scale.set(0.5, 0.5, 0.5); // Scale the model
+          modelObject.scale.set(0.5, 0.5, 0.5);  // Scale model
           uploadedModel = true;
-          createAnnotations();  // After model loads, create annotations
+          createAnnotations();  // After loading model, add annotations
         });
-
-        // Camera Position
         camera.position.z = 3;
       }
     }
 
-    // Create interactive annotations after model is loaded
+    // Function to create example annotations (you can customize this)
     function createAnnotations() {
-      // Example of hardcoded annotations
-      annotations.push({ 
-        name: 'Annotation 1', 
-        position: { x: 1, y: 0, z: 0 }, 
+      annotations.push({
+        name: 'Annotation 1',
+        position: { x: 1, y: 0, z: 0 },
         text: 'This is part 1 of the model'
       });
-      annotations.push({ 
-        name: 'Annotation 2', 
-        position: { x: -1, y: 0, z: 0 }, 
+      annotations.push({
+        name: 'Annotation 2',
+        position: { x: -1, y: 0, z: 0 },
         text: 'This is part 2 of the model'
       });
 
-      // Loop through annotations and create clickable spheres in 3D
+      loadAnnotations(); // Refresh the UI with existing annotations
+    }
+
+    // Display saved annotations on the UI
+    function loadAnnotations() {
+      annotationsDiv.innerHTML = '';  // Clear existing annotations list
       annotations.forEach((annotation, index) => {
+        const annotationText = document.createElement('div');
+        annotationText.className = 'annotation-item';
+        annotationText.innerText = annotation.text;
+        annotationText.onclick = () => alert(`Annotation: ${annotation.text}`);
+        annotationsDiv.appendChild(annotationText);
+
+        // Create 3D sphere for each annotation
         const geometry = new THREE.SphereGeometry(0.05);
         const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         const sphere = new THREE.Mesh(geometry, material);
         sphere.position.set(annotation.position.x, annotation.position.y, annotation.position.z);
         scene.add(sphere);
-
-        // Create annotation text in the UI
-        const annotationText = document.createElement('div');
-        annotationText.className = 'annotation';
-        annotationText.innerText = annotation.text;
-        annotationText.style.top = `${Math.random() * 100}%`;
-        annotationText.style.left = `${Math.random() * 100}%`;
-        annotationsDiv.appendChild(annotationText);
-
-        // Add interactivity to annotations
-        sphere.onClick = () => {
-          alert(`Annotation: ${annotation.text}`);
-        };
       });
     }
 
-    function animate() {
-      if (modelObject) {
-        modelObject.rotation.y += 0.01; // Rotate the model slightly to make it more interactive
+    // Add a new annotation
+    function addAnnotation() {
+      const annotationText = document.getElementById('annotationInput').value;
+      if (annotationText && modelObject) {
+        const position = modelObject.position.clone(); // Default position at the model's center
+        annotations.push({
+          name: `Annotation ${annotations.length + 1}`,
+          position: position,
+          text: annotationText
+        });
+
+        localStorage.setItem('annotations', JSON.stringify(annotations)); // Store in localStorage
+        loadAnnotations();  // Reload annotations on the UI
+        document.getElementById('annotationInput').value = '';  // Clear input field
       }
-      renderer.setAnimationLoop(animate);
-      renderer.render(scene, camera);
     }
 
+    // Enter VR mode
     function enterVR() {
       if (navigator.xr) {
         navigator.xr.requestSession('immersive-vr').then(function(session) {
@@ -150,6 +222,15 @@
       } else {
         alert('WebXR not supported on this device.');
       }
+    }
+
+    // Animation loop
+    function animate() {
+      if (modelObject) {
+        modelObject.rotation.y += 0.01;  // Rotate the model for a dynamic view
+      }
+      renderer.setAnimationLoop(animate);
+      renderer.render(scene, camera);
     }
 
     // Initialize the scene when the page loads
