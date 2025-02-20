@@ -22,39 +22,23 @@
       background: #111;
     }
 
-    /* Main container for UI controls */
     .controls-container {
       position: absolute;
       top: 20px;
       left: 20px;
       z-index: 10;
-      background-color: rgba(0, 0, 0, 0.7);
+      background-color: rgba(0, 0, 0, 0.8);
       color: white;
-      padding: 20px;
+      padding: 15px;
       border-radius: 10px;
       max-width: 300px;
       width: 100%;
     }
 
-    .controls-container h1 {
-      font-size: 20px;
-      margin-bottom: 10px;
-    }
-
-    input[type="file"] {
-      background-color: #fff;
-      color: #333;
-      padding: 10px;
-      width: 100%;
-      margin-bottom: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-
     .button {
       background: #007BFF;
       color: white;
-      padding: 12px 20px;
+      padding: 10px;
       border: none;
       border-radius: 5px;
       width: 100%;
@@ -68,12 +52,12 @@
     }
 
     .annotation-container {
-      margin-top: 20px;
-      background-color: rgba(0, 0, 0, 0.7);
-      padding: 15px;
+      margin-top: 15px;
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 10px;
       border-radius: 5px;
-      overflow-y: auto;
       max-height: 200px;
+      overflow-y: auto;
     }
 
     .annotation-item {
@@ -86,17 +70,15 @@
     }
 
     .annotation-item:hover {
-      background: rgba(0, 0, 0, 1);
+      background: rgba(255, 0, 0, 0.7);
     }
-
+    
     .annotation-input {
-      background: #fff;
-      color: #333;
-      padding: 8px;
       width: 100%;
-      margin-bottom: 10px;
+      padding: 8px;
       border-radius: 5px;
       border: 1px solid #ccc;
+      margin-bottom: 10px;
     }
   </style>
 </head>
@@ -108,32 +90,25 @@
     <button class="button" onclick="enterVR()">Enter VR Mode</button>
 
     <div class="annotation-container">
-      <h2>Add Annotation</h2>
+      <h2>Annotations</h2>
       <input type="text" id="annotationInput" class="annotation-input" placeholder="Enter annotation..." />
       <button class="button" onclick="addAnnotation()">Add Annotation</button>
-
-      <h3>Annotations</h3>
-      <div id="annotations" class="annotation-list"></div>
+      <button class="button" onclick="deleteAnnotation()">Delete Selected</button>
+      <div id="annotations"></div>
     </div>
   </div>
 
   <div id="webxr-container"></div>
 
   <script>
-    let scene, camera, renderer;
-    let modelUrl = null;
-    let modelObject = null;
-    let annotations = [];
+    let scene, camera, renderer, modelObject = null, annotations = [];
     let annotationsDiv = document.getElementById('annotations');
-    let uploadedModel = false;
+    let selectedAnnotation = null;
 
-    // Load annotations from local storage if any
     if (localStorage.getItem('annotations')) {
       annotations = JSON.parse(localStorage.getItem('annotations'));
-      loadAnnotations();
     }
 
-    // Handle file upload
     document.getElementById('fileInput').addEventListener('change', handleFileUpload);
 
     function handleFileUpload(event) {
@@ -141,8 +116,13 @@
       if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) {
         const reader = new FileReader();
         reader.onload = function(e) {
-          modelUrl = e.target.result;
-          loadModel();
+          let loader = new THREE.GLTFLoader();
+          loader.load(URL.createObjectURL(file), function(gltf) {
+            modelObject = gltf.scene;
+            scene.add(modelObject);
+            modelObject.scale.set(0.5, 0.5, 0.5);
+            loadAnnotations();
+          });
         };
         reader.readAsArrayBuffer(file);
       } else {
@@ -157,98 +137,90 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.getElementById('webxr-container').appendChild(renderer.domElement);
 
-      // Lighting
-      const light = new THREE.AmbientLight(0x404040, 5);
+      const light = new THREE.AmbientLight(0xffffff, 3);
       scene.add(light);
+      camera.position.z = 3;
 
       animate();
     }
 
-    // Load 3D model
-    function loadModel() {
-      if (modelUrl && !uploadedModel) {
-        const loader = new THREE.GLTFLoader();
-        loader.load(modelUrl, function(gltf) {
-          modelObject = gltf.scene;
-          scene.add(modelObject);
-          modelObject.scale.set(0.5, 0.5, 0.5);
-          uploadedModel = true;
-          createAnnotations();
-        });
-        camera.position.z = 3;
+    function addAnnotation() {
+      if (!modelObject) {
+        alert("Load a model first!");
+        return;
       }
-    }
 
-    function createAnnotations() {
-      annotations.push({
-        name: 'Annotation 1',
-        position: { x: 1, y: 0, z: 0 },
-        text: 'This is part 1 of the model'
-      });
-      annotations.push({
-        name: 'Annotation 2',
-        position: { x: -1, y: 0, z: 0 },
-        text: 'This is part 2 of the model'
-      });
+      const annotationText = document.getElementById('annotationInput').value;
+      if (annotationText.trim() === "") return;
 
+      const annotation = {
+        id: annotations.length,
+        text: annotationText,
+        position: { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() * 2 - 1 }
+      };
+
+      annotations.push(annotation);
+      localStorage.setItem('annotations', JSON.stringify(annotations));
       loadAnnotations();
     }
 
-    // Display saved annotations on the UI
     function loadAnnotations() {
       annotationsDiv.innerHTML = '';
       annotations.forEach((annotation, index) => {
-        const annotationText = document.createElement('div');
-        annotationText.className = 'annotation-item';
-        annotationText.innerText = annotation.text;
-        annotationText.onclick = () => alert(`Annotation: ${annotation.text}`);
-        annotationsDiv.appendChild(annotationText);
+        const item = document.createElement('div');
+        item.className = 'annotation-item';
+        item.innerText = annotation.text;
+        item.onclick = () => selectAnnotation(index);
+        annotationsDiv.appendChild(item);
 
-        const geometry = new THREE.SphereGeometry(0.05);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        const sphere = new THREE.Mesh(geometry, material);
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.05),
+          new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
         sphere.position.set(annotation.position.x, annotation.position.y, annotation.position.z);
+        sphere.userData.annotationIndex = index;
         scene.add(sphere);
       });
     }
 
-    function addAnnotation() {
-      const annotationText = document.getElementById('annotationInput').value;
-      if (annotationText && modelObject) {
-        const position = modelObject.position.clone();
-        annotations.push({
-          name: `Annotation ${annotations.length + 1}`,
-          position: position,
-          text: annotationText
-        });
+    function selectAnnotation(index) {
+      selectedAnnotation = index;
+      alert("Selected: " + annotations[index].text);
+    }
 
-        localStorage.setItem('annotations', JSON.stringify(annotations));
-        loadAnnotations();
-        document.getElementById('annotationInput').value = '';
+    function deleteAnnotation() {
+      if (selectedAnnotation === null) {
+        alert("Select an annotation first!");
+        return;
       }
+      annotations.splice(selectedAnnotation, 1);
+      localStorage.setItem('annotations', JSON.stringify(annotations));
+      selectedAnnotation = null;
+      loadAnnotations();
     }
 
     function enterVR() {
       if (navigator.xr) {
-        navigator.xr.requestSession('immersive-vr').then(function(session) {
+        navigator.xr.requestSession('immersive-vr').then((session) => {
           renderer.xr.enabled = true;
           renderer.xr.setSession(session);
-          animate();
         });
       } else {
-        alert('WebXR not supported on this device.');
+        alert('WebXR not supported.');
       }
     }
 
     function animate() {
+      requestAnimationFrame(animate);
       if (modelObject) {
         modelObject.rotation.y += 0.01;
       }
-      renderer.setAnimationLoop(animate);
       renderer.render(scene, camera);
     }
 
     init();
+    loadAnnotations();
   </script>
+
 </body>
 </html>
